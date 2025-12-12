@@ -29,6 +29,7 @@ import { InjectKysely } from 'nestjs-kysely';
 import { executeTx } from '@docmost/db/utils';
 import { VerifyUserTokenDto } from '../dto/verify-user-token.dto';
 import { DomainService } from '../../../integrations/environment/domain.service';
+import { WorkspaceRepo } from '@docmost/db/repos/workspace/workspace.repo';
 
 @Injectable()
 export class AuthService {
@@ -36,6 +37,7 @@ export class AuthService {
     private signupService: SignupService,
     private tokenService: TokenService,
     private userRepo: UserRepo,
+    private workspaceRepo: WorkspaceRepo,
     private userTokenRepo: UserTokenRepo,
     private mailService: MailService,
     private domainService: DomainService,
@@ -67,6 +69,51 @@ export class AuthService {
     return this.tokenService.generateAccessToken(user);
   }
 
+  async cloudLogin(loginDto: LoginDto) {
+    // Find user globally by email
+    const user = await this.userRepo.findByEmailGlobal(loginDto.email, {
+      includePassword: true,
+    });
+
+    const errorMessage = 'Email or password does not match';
+    if (!user || user?.deletedAt) {
+      throw new UnauthorizedException(errorMessage);
+    }
+
+    // Validate password
+    const isPasswordMatch = await comparePasswordHash(
+      loginDto.password,
+      user.password,
+    );
+
+    if (!isPasswordMatch) {
+      throw new UnauthorizedException(errorMessage);
+    }
+
+    // Get user's workspace
+    if (!user.workspaceId) {
+      throw new UnauthorizedException('User is not associated with any workspace');
+    }
+
+    const workspace = await this.workspaceRepo.findById(user.workspaceId);
+    if (!workspace) {
+      throw new UnauthorizedException('Workspace not found');
+    }
+
+    // Update last login
+    user.lastLoginAt = new Date();
+    await this.userRepo.updateLastLogin(user.id, user.workspaceId);
+
+    // Generate token
+    const authToken = await this.tokenService.generateAccessToken(user);
+
+    return {
+      authToken,
+      workspace,
+      user,
+    };
+  }
+
   async register(createUserDto: CreateUserDto, workspaceId: string) {
     const user = await this.signupService.signup(createUserDto, workspaceId);
     return this.tokenService.generateAccessToken(user);
@@ -78,6 +125,14 @@ export class AuthService {
 
     const authToken = await this.tokenService.generateAccessToken(user);
     return { workspace, authToken };
+  }
+
+  async cloudSignup(createAdminUserDto: CreateAdminUserDto) {
+    const { workspace, user } =
+      await this.signupService.cloudSignup(createAdminUserDto);
+
+    const authToken = await this.tokenService.generateAccessToken(user);
+    return { workspace, authToken, user };
   }
 
   async changePassword(

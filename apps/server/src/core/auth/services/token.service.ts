@@ -60,7 +60,8 @@ export class TokenService {
       workspaceId: workspaceId,
       type: JwtType.EXCHANGE,
     };
-    return this.jwtService.sign(payload, { expiresIn: '10s' });
+    // 5 minutes should be enough for redirect flow
+    return this.jwtService.sign(payload, { expiresIn: '5m' });
   }
 
   async generateAttachmentToken(opts: {

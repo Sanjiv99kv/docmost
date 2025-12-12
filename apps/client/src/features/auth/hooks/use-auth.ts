@@ -48,7 +48,9 @@ export default function useAuth() {
       } else if (response?.requiresMfaSetup) {
         navigate(APP_ROUTE.AUTH.MFA_SETUP_REQUIRED);
       } else {
-        navigate(APP_ROUTE.HOME);
+        // Use window.location.href for full page reload to ensure cookie is sent
+        // This ensures the auth cookie is properly included in subsequent requests
+        window.location.href = APP_ROUTE.HOME;
       }
     } catch (err) {
       setIsLoading(false);

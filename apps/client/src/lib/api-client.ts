@@ -27,6 +27,21 @@ api.interceptors.response.use(
           const url = new URL(error.request.responseURL)?.pathname;
           if (url === "/api/auth/collab-token") return;
           if (window.location.pathname.startsWith("/share/")) return;
+          // Don't redirect on /api/users/me if we're on login/signup pages (user might be logging in)
+          if (url === "/api/users/me") {
+            const exemptPaths = [
+              APP_ROUTE.AUTH.LOGIN,
+              APP_ROUTE.AUTH.SIGNUP,
+              APP_ROUTE.AUTH.FORGOT_PASSWORD,
+              APP_ROUTE.AUTH.PASSWORD_RESET,
+              "/invites",
+              "/create",
+              "/select",
+            ];
+            if (exemptPaths.some((path) => window.location.pathname.startsWith(path))) {
+              return;
+            }
+          }
 
           // Handle unauthorized error
           redirectToLogin();

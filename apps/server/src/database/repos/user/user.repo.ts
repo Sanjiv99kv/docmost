@@ -77,6 +77,25 @@ export class UserRepo {
       .executeTakeFirst();
   }
 
+  async findByEmailGlobal(
+    email: string,
+    opts?: {
+      includePassword?: boolean;
+      includeUserMfa?: boolean;
+      trx?: KyselyTransaction;
+    },
+  ): Promise<User> {
+    const db = dbOrTx(this.db, opts?.trx);
+    return db
+      .selectFrom('users')
+      .select(this.baseFields)
+      .$if(opts?.includePassword, (qb) => qb.select('password'))
+      .$if(opts?.includeUserMfa, (qb) => qb.select(this.withUserMfa))
+      .where(sql`LOWER(email)`, '=', sql`LOWER(${email})`)
+      .where('deletedAt', 'is', null)
+      .executeTakeFirst();
+  }
+
   async updateUser(
     updatableUser: UpdatableUser,
     userId: string,

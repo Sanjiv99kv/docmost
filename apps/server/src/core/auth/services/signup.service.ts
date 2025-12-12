@@ -10,6 +10,7 @@ import { InjectKysely } from 'nestjs-kysely';
 import { User, Workspace } from '@docmost/db/types/entity.types';
 import { GroupUserRepo } from '@docmost/db/repos/group/group-user.repo';
 import { UserRole } from '../../../common/helpers/types/permission';
+import { sql } from 'kysely';
 
 @Injectable()
 export class SignupService {
@@ -79,6 +80,62 @@ export class SignupService {
       this.db,
       async (trx) => {
         // create user
+        user = await this.userRepo.insertUser(
+          {
+            name: createAdminUserDto.name,
+            email: createAdminUserDto.email,
+            password: createAdminUserDto.password,
+            role: UserRole.OWNER,
+            emailVerifiedAt: new Date(),
+          },
+          trx,
+        );
+
+        // create workspace with full setup
+        const workspaceData: CreateWorkspaceDto = {
+          name: createAdminUserDto.workspaceName || 'My workspace',
+          hostname: createAdminUserDto.hostname,
+        };
+
+        workspace = await this.workspaceService.create(
+          user,
+          workspaceData,
+          trx,
+        );
+
+        user.workspaceId = workspace.id;
+        return user;
+      },
+      trx,
+    );
+
+    return { user, workspace };
+  }
+
+  async cloudSignup(
+    createAdminUserDto: CreateAdminUserDto,
+    trx?: KyselyTransaction,
+  ) {
+    let user: User,
+      workspace: Workspace = null;
+
+    await executeTx(
+      this.db,
+      async (trx) => {
+        // Check if user with this email already exists globally (across all workspaces)
+        const existingUser = await trx
+          .selectFrom('users')
+          .select(['id', 'email'])
+          .where(sql`LOWER(email)`, '=', sql`LOWER(${createAdminUserDto.email})`)
+          .executeTakeFirst();
+
+        if (existingUser) {
+          throw new BadRequestException(
+            'An account with this email already exists',
+          );
+        }
+
+        // create user without workspace initially
         user = await this.userRepo.insertUser(
           {
             name: createAdminUserDto.name,

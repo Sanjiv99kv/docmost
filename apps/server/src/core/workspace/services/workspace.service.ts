@@ -115,10 +115,11 @@ export class WorkspaceService {
         let billingEmail = undefined;
 
         if (this.environmentService.isCloud()) {
-          // generate unique hostname
-          hostname = await this.generateHostname(
-            createWorkspaceDto.hostname ?? createWorkspaceDto.name,
-          );
+          // generate unique hostname from provided hostname, workspace name, or fallback to name
+          const hostnameSource = createWorkspaceDto.hostname 
+            ?? createWorkspaceDto.name 
+            ?? 'workspace';
+          hostname = await this.generateHostname(hostnameSource);
           trialEndAt = addDays(
             new Date(),
             this.environmentService.getBillingTrialDays(),
@@ -446,8 +447,11 @@ export class WorkspaceService {
       subdomain = `${subdomain}-${generateRandomSuffixNumbers(maxSuffixLength)}`;
     }
 
+    // If hostname is disallowed, append a suffix instead of replacing it
+    // This preserves the user's chosen name (e.g., "demo" -> "demo-123456")
     if (DISALLOWED_HOSTNAMES.includes(subdomain)) {
-      subdomain = `workspace-${generateRandomSuffixNumbers(maxSuffixLength)}`;
+      const randomSuffix = generateRandomSuffixNumbers(maxSuffixLength);
+      subdomain = `${subdomain}-${randomSuffix}`;
     }
 
     let uniqueHostname = subdomain;
@@ -469,11 +473,14 @@ export class WorkspaceService {
   }
 
   async checkHostname(hostname: string) {
-    const exists = await this.workspaceRepo.hostnameExists(hostname);
-    if (!exists) {
-      throw new NotFoundException('Hostname not found');
+    // Check if hostname is in disallowed list
+    if (DISALLOWED_HOSTNAMES.includes(hostname.toLowerCase())) {
+      return { available: false };
     }
-    return { hostname: this.domainService.getUrl(hostname) };
+
+    // Check if hostname already exists
+    const exists = await this.workspaceRepo.hostnameExists(hostname);
+    return { available: !exists };
   }
 
   async deleteUser(

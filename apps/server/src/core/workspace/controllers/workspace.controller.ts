@@ -11,6 +11,7 @@ import {
 } from '@nestjs/common';
 import { WorkspaceService } from '../services/workspace.service';
 import { UpdateWorkspaceDto } from '../dto/update-workspace.dto';
+import { CreateWorkspaceDto } from '../dto/create-workspace.dto';
 import { UpdateWorkspaceUserRoleDto } from '../dto/update-workspace-user-role.dto';
 import { AuthUser } from '../../../common/decorators/auth-user.decorator';
 import { AuthWorkspace } from '../../../common/decorators/auth-workspace.decorator';
@@ -30,10 +31,14 @@ import {
   WorkspaceCaslAction,
   WorkspaceCaslSubject,
 } from '../../casl/interfaces/workspace-ability.type';
-import { FastifyReply } from 'fastify';
+import { FastifyReply, FastifyRequest } from 'fastify';
 import { EnvironmentService } from '../../../integrations/environment/environment.service';
 import { CheckHostnameDto } from '../dto/check-hostname.dto';
 import { RemoveWorkspaceUserDto } from '../dto/remove-workspace-user.dto';
+import { ModuleRef } from '@nestjs/core';
+import { AuthService } from '../../auth/services/auth.service';
+import { TokenService } from '../../auth/services/token.service';
+import { UserRepo } from '@docmost/db/repos/user/user.repo';
 
 @UseGuards(JwtAuthGuard)
 @Controller('workspace')
@@ -43,6 +48,9 @@ export class WorkspaceController {
     private readonly workspaceInvitationService: WorkspaceInvitationService,
     private readonly workspaceAbility: WorkspaceAbilityFactory,
     private environmentService: EnvironmentService,
+    private moduleRef: ModuleRef,
+    private tokenService: TokenService,
+    private userRepo: UserRepo,
   ) {}
 
   @Public()
@@ -84,7 +92,18 @@ export class WorkspaceController {
       workspace.hostname !== updatedWorkspace.hostname
     ) {
       // log user out of old hostname
-      res.clearCookie('authToken');
+      const cookieOptions: any = {
+        path: '/',
+      };
+
+      if (this.environmentService.isCloud()) {
+        const subdomainHost = this.environmentService.getSubdomainHost();
+        if (subdomainHost) {
+          cookieOptions.domain = '.' + subdomainHost;
+        }
+      }
+
+      res.clearCookie('authToken', cookieOptions);
     }
 
     return updatedWorkspace;
@@ -274,6 +293,10 @@ export class WorkspaceController {
       path: '/',
       expires: this.environmentService.getCookieExpiresIn(),
       secure: this.environmentService.isHttps(),
+      // Add domain for cloud mode
+      ...(this.environmentService.isCloud() && {
+        domain: '.' + this.environmentService.getSubdomainHost(),
+      }),
     });
 
     return {
@@ -286,6 +309,67 @@ export class WorkspaceController {
   @Post('/check-hostname')
   async checkHostname(@Body() checkHostnameDto: CheckHostnameDto) {
     return this.workspaceService.checkHostname(checkHostnameDto.hostname);
+  }
+
+  @Public()
+  @HttpCode(HttpStatus.OK)
+  @Post('/create')
+  async createWorkspace(
+    @Body() body: CreateWorkspaceDto & { name: string; email: string; password: string; workspaceName?: string },
+    @Res({ passthrough: true }) res: FastifyReply,
+    @Req() req: FastifyRequest,
+  ) {
+    // Only allow workspace creation from base domain in cloud mode
+    if (this.environmentService.isCloud()) {
+      const header = req.headers.host || '';
+      const subdomainHost = this.environmentService.getSubdomainHost();
+      
+      // Extract hostname without port
+      const hostname = header.split(':')[0];
+      
+      // Check if this is the base domain (with or without port, with or without www)
+      if (hostname !== subdomainHost && hostname !== `www.${subdomainHost}`) {
+        throw new ForbiddenException('Workspace creation is only allowed from the base domain');
+      }
+    }
+
+    const authService = this.moduleRef.get(AuthService, { strict: false });
+
+    // Use workspaceName if provided, otherwise fall back to name
+    const workspaceName = body.workspaceName?.trim() || body.name;
+    
+    const { workspace, authToken, user } = await authService.cloudSignup({
+      name: body.name,
+      email: body.email,
+      password: body.password,
+      workspaceName: workspaceName,
+      hostname: body.hostname,
+    });
+
+    // Set auth cookie with domain for cloud mode
+    const cookieOptions: any = {
+      httpOnly: true,
+      path: '/',
+      expires: this.environmentService.getCookieExpiresIn(),
+      secure: this.environmentService.isHttps(),
+    };
+
+    if (this.environmentService.isCloud()) {
+      const subdomainHost = this.environmentService.getSubdomainHost();
+      if (subdomainHost) {
+        cookieOptions.domain = '.' + subdomainHost;
+      }
+    }
+
+    res.setCookie('authToken', authToken, cookieOptions);
+
+    // Generate exchange token for redirect (short-lived token for security)
+    const exchangeToken = await this.tokenService.generateExchangeToken(
+      user.id,
+      workspace.id,
+    );
+
+    return { workspace, exchangeToken };
   }
 
   @HttpCode(HttpStatus.OK)

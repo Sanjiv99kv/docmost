@@ -26,11 +26,9 @@ try {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     enterpriseModules.push(require('./ee/ee.module')?.EeModule);
   }
-} catch (err) {
-  if (process.env.CLOUD === 'true') {
-    console.warn('Failed to load enterprise modules. Exiting program.\n', err);
-    process.exit(1);
-  }
+} catch (err: any) {
+  // Enterprise module is optional - log warning but continue
+  console.warn('Enterprise modules not found. Continuing without enterprise features.\n', err.message || err);
 }
 
 @Module({
@@ -62,4 +60,4 @@ try {
   controllers: [AppController],
   providers: [AppService],
 })
-export class AppModule {}
+export class AppModule { }
