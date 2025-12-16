@@ -77,7 +77,7 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
       // Self-hosted mode - strict matching
       if (req.raw?.workspaceId && req.raw.workspaceId !== payload.workspaceId) {
         this.logger.warn(`Self-hosted workspace mismatch - req.raw.workspaceId: ${req.raw.workspaceId}, token workspaceId: ${payload.workspaceId}`);
-        throw new UnauthorizedException('Workspace does not match');
+      throw new UnauthorizedException('Workspace does not match');
       }
     }
 

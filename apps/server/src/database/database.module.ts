@@ -36,30 +36,113 @@ types.setTypeParser(types.builtins.INT8, (val) => Number(val));
     KyselyModule.forRootAsync({
       imports: [],
       inject: [EnvironmentService],
-      useFactory: (environmentService: EnvironmentService) => ({
-        dialect: new PostgresDialect({
-          pool: new Pool({
-            connectionString: environmentService.getDatabaseURL(),
-            max: environmentService.getDatabaseMaxPool(),
-          }).on('error', (err) => {
-            console.error('Database error:', err.message);
-          }),
-        }),
-        plugins: [new CamelCasePlugin()],
-        log: (event: LogEvent) => {
-          if (environmentService.getNodeEnv() !== 'development') return;
-          const logger = new Logger(DatabaseModule.name);
-          if (event.level) {
-            if (process.env.DEBUG_DB?.toLowerCase() === 'true') {
-              logger.debug(event.query.sql);
-              logger.debug('query time: ' + event.queryDurationMillis + ' ms');
-              //if (event.query.parameters.length > 0) {
-              // logger.debug('parameters: ' + event.query.parameters);
-              //}
-            }
+      useFactory: (environmentService: EnvironmentService) => {
+        const databaseUrl = environmentService.getDatabaseURL();
+        const isProduction = environmentService.getNodeEnv() === 'production';
+
+        // Check if individual DB parameters are provided
+        const dbHost = environmentService.getDatabaseHost();
+        const dbPort = environmentService.getDatabasePort();
+        const dbUsername = environmentService.getDatabaseUsername();
+        const dbPassword = environmentService.getDatabasePassword();
+        const dbName = environmentService.getDatabaseName();
+
+        // Determine if SSL should be enabled
+        // Enable SSL for: production, AWS RDS hosts, or when DB_SSL_ENABLED is set
+        let shouldUseSSL = false;
+        let sslConfig: any = false;
+        let hostname: string | undefined;
+
+        // Determine hostname for SSL detection
+        if (dbHost) {
+          hostname = dbHost;
+        } else if (databaseUrl) {
+          try {
+            const url = new URL(databaseUrl);
+            hostname = url.hostname;
+          } catch (err) {
+            // URL parsing failed, will handle below
           }
-        },
-      }),
+        }
+
+        // Check if it's a remote host (RDS)
+        const isRemoteHost = hostname &&
+          (hostname.includes('.rds.amazonaws.com') ||
+            hostname.includes('.rds.') ||
+            !['localhost', '127.0.0.1'].includes(hostname));
+
+        // Check sslmode in URL if using connection string
+        let hasSslMode = false;
+        if (databaseUrl) {
+          try {
+            const url = new URL(databaseUrl);
+            const sslParam = url.searchParams.get('sslmode');
+            hasSslMode = sslParam === 'require' || sslParam === 'prefer' || sslParam === 'verify-ca' || sslParam === 'verify-full';
+          } catch (err) {
+            // Ignore URL parsing errors
+          }
+        }
+
+        // Determine if SSL should be used
+        shouldUseSSL = isProduction ||
+          isRemoteHost ||
+          process.env.DB_SSL_ENABLED === 'true' ||
+          hasSslMode;
+
+        if (shouldUseSSL) {
+          // For AWS RDS, we need to accept self-signed certificates
+          sslConfig = {
+            rejectUnauthorized: false, // Accept RDS self-signed certificates
+          };
+        }
+
+        // Build pool configuration
+        let poolConfig: any = {
+          max: environmentService.getDatabaseMaxPool(),
+          ssl: sslConfig,
+        };
+
+        // Use individual parameters if provided, otherwise use connection string
+        if (dbHost && dbPort && dbUsername && dbPassword && dbName) {
+          poolConfig = {
+            ...poolConfig,
+            host: dbHost,
+            port: dbPort,
+            user: dbUsername,
+            password: dbPassword,
+            database: dbName,
+          };
+        } else if (databaseUrl) {
+          poolConfig = {
+            ...poolConfig,
+            connectionString: databaseUrl,
+          };
+        } else {
+          throw new Error('Either DATABASE_URL or individual database parameters (DATABASE_HOST, DATABASE_PORT, DATABASE_USERNAME, DATABASE_PASSWORD, DATABASE_NAME) must be provided');
+        }
+
+        return {
+          dialect: new PostgresDialect({
+            pool: new Pool(poolConfig).on('error', (err) => {
+              console.error('Database error:', err.message);
+            }),
+          }),
+          plugins: [new CamelCasePlugin()],
+          log: (event: LogEvent) => {
+            if (environmentService.getNodeEnv() !== 'development') return;
+            const logger = new Logger(DatabaseModule.name);
+            if (event.level) {
+              if (process.env.DEBUG_DB?.toLowerCase() === 'true') {
+                logger.debug(event.query.sql);
+                logger.debug('query time: ' + event.queryDurationMillis + ' ms');
+                //if (event.query.parameters.length > 0) {
+                // logger.debug('parameters: ' + event.query.parameters);
+                //}
+              }
+            }
+          },
+        };
+      },
     }),
   ],
   providers: [
@@ -96,15 +179,14 @@ types.setTypeParser(types.builtins.INT8, (val) => Number(val));
   ],
 })
 export class DatabaseModule
-  implements OnApplicationBootstrap, BeforeApplicationShutdown
-{
+  implements OnApplicationBootstrap, BeforeApplicationShutdown {
   private readonly logger = new Logger(DatabaseModule.name);
 
   constructor(
     @InjectKysely() private readonly db: KyselyDB,
     private readonly migrationService: MigrationService,
     private readonly environmentService: EnvironmentService,
-  ) {}
+  ) { }
 
   async onApplicationBootstrap() {
     await this.establishConnection();

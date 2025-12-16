@@ -24,7 +24,9 @@ export class CollaborationGateway {
     private loggerExtension: LoggerExtension,
     private environmentService: EnvironmentService,
   ) {
-    this.redisConfig = parseRedisUrl(this.environmentService.getRedisUrl());
+    const redisUrl = this.environmentService.getRedisUrl();
+    this.redisConfig = parseRedisUrl(redisUrl);
+    const isTls = redisUrl.startsWith('rediss://');
 
     this.hocuspocus = HocuspocusServer.configure({
       debounce: 10000,
@@ -45,6 +47,11 @@ export class CollaborationGateway {
                   db: this.redisConfig.db,
                   family: this.redisConfig.family,
                   retryStrategy: createRetryStrategy(),
+                  ...(isTls && {
+                    tls: {
+                      rejectUnauthorized: false, // For AWS ElastiCache with self-signed certs
+                    },
+                  }),
                 },
               }),
             ]),

@@ -13,15 +13,22 @@ export class WsRedisIoAdapter extends IoAdapter {
   private redisConfig: RedisConfig;
 
   async connectToRedis(): Promise<void> {
-    this.redisConfig = parseRedisUrl(process.env.REDIS_URL);
+    const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379';
+    this.redisConfig = parseRedisUrl(redisUrl);
+    const isTls = redisUrl.startsWith('rediss://');
 
     const options: RedisOptions = {
       family: this.redisConfig.family,
       retryStrategy: createRetryStrategy(),
+      ...(isTls && {
+        tls: {
+          rejectUnauthorized: false, // For AWS ElastiCache with self-signed certs
+        },
+      }),
     };
 
-    const pubClient = new Redis(process.env.REDIS_URL, options);
-    const subClient = new Redis(process.env.REDIS_URL, options);
+    const pubClient = new Redis(redisUrl, options);
+    const subClient = new Redis(redisUrl, options);
 
     this.adapterConstructor = createAdapter(pubClient, subClient);
   }

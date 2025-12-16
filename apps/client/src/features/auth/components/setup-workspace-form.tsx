@@ -60,15 +60,15 @@ export function SetupWorkspaceForm() {
           {isCloud() && <SsoCloudSignup />}
 
           <form onSubmit={form.onSubmit(onSubmit)}>
-            <TextInput
-              id="workspaceName"
-              type="text"
-              label={t("Workspace Name")}
-              placeholder={t("e.g ACME Inc")}
-              variant="filled"
-              mt="md"
-              {...form.getInputProps("workspaceName")}
-            />
+              <TextInput
+                id="workspaceName"
+                type="text"
+                label={t("Workspace Name")}
+                placeholder={t("e.g ACME Inc")}
+                variant="filled"
+                mt="md"
+                {...form.getInputProps("workspaceName")}
+              />
 
             <TextInput
               id="name"

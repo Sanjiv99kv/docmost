@@ -49,6 +49,27 @@ export class EnvironmentService {
     return this.configService.get<string>('DATABASE_URL');
   }
 
+  getDatabaseHost(): string | undefined {
+    return this.configService.get<string>('DATABASE_HOST');
+  }
+
+  getDatabasePort(): number | undefined {
+    const port = this.configService.get<string>('DATABASE_PORT');
+    return port ? parseInt(port, 10) : undefined;
+  }
+
+  getDatabaseUsername(): string | undefined {
+    return this.configService.get<string>('DATABASE_USERNAME') || this.configService.get<string>('DATABASE_USER');
+  }
+
+  getDatabasePassword(): string | undefined {
+    return this.configService.get<string>('DATABASE_PASSWORD');
+  }
+
+  getDatabaseName(): string | undefined {
+    return this.configService.get<string>('DATABASE_NAME') || this.configService.get<string>('DATABASE_DB');
+  }
+
   getDatabaseMaxPool(): number {
     return parseInt(this.configService.get<string>('DATABASE_MAX_POOL', '10'));
   }

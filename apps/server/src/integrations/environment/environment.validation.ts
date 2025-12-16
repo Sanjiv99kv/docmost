@@ -8,21 +8,53 @@ import {
   MinLength,
   ValidateIf,
   validateSync,
+  ValidatorConstraint,
+  ValidatorConstraintInterface,
+  ValidationArguments,
+  Validate,
 } from 'class-validator';
 import { plainToInstance } from 'class-transformer';
 import { IsISO6391 } from '../../common/validator/is-iso6391';
 
 export class EnvironmentVariables {
-  @IsNotEmpty()
-  @IsUrl(
-    {
-      protocols: ['postgres', 'postgresql'],
-      require_tld: false,
-      allow_underscores: true,
-    },
-    { message: 'DATABASE_URL must be a valid postgres connection string' },
-  )
+  // DATABASE_URL is completely optional - no validation, handled by custom validation function
+  @IsOptional()
   DATABASE_URL: string;
+
+  // Individual database parameters are required if DATABASE_URL is not provided
+  @ValidateIf((obj) => !obj.DATABASE_URL)
+  @IsNotEmpty({ message: 'DATABASE_HOST is required when DATABASE_URL is not provided' })
+  @IsString()
+  DATABASE_HOST: string;
+
+  @ValidateIf((obj) => !obj.DATABASE_URL)
+  @IsNotEmpty({ message: 'DATABASE_PORT is required when DATABASE_URL is not provided' })
+  @IsString()
+  DATABASE_PORT: string;
+
+  @ValidateIf((obj) => !obj.DATABASE_URL)
+  @IsNotEmpty({ message: 'DATABASE_USERNAME or DATABASE_USER is required when DATABASE_URL is not provided' })
+  @IsString()
+  DATABASE_USERNAME: string;
+
+  @ValidateIf((obj) => !obj.DATABASE_URL)
+  @IsNotEmpty({ message: 'DATABASE_PASSWORD is required when DATABASE_URL is not provided' })
+  @IsString()
+  DATABASE_PASSWORD: string;
+
+  @ValidateIf((obj) => !obj.DATABASE_URL)
+  @IsNotEmpty({ message: 'DATABASE_NAME or DATABASE_DB is required when DATABASE_URL is not provided' })
+  @IsString()
+  DATABASE_NAME: string;
+
+  // Support alternative names (optional, used as fallback)
+  @IsOptional()
+  @IsString()
+  DATABASE_USER: string;
+
+  @IsOptional()
+  @IsString()
+  DATABASE_DB: string;
 
   @IsNotEmpty()
   @IsUrl(
@@ -152,8 +184,71 @@ export class EnvironmentVariables {
 }
 
 export function validate(config: Record<string, any>) {
-  const validatedConfig = plainToInstance(EnvironmentVariables, config);
+  // Custom validation: Check if either DATABASE_URL or all individual parameters are provided
+  // This check runs BEFORE class-validator to prevent confusing error messages
+  const hasDatabaseUrl = config.DATABASE_URL && 
+    typeof config.DATABASE_URL === 'string' && 
+    config.DATABASE_URL.trim() !== '';
+  
+  const hasIndividualParams = config.DATABASE_HOST && 
+    config.DATABASE_PORT &&
+    (config.DATABASE_USERNAME || config.DATABASE_USER) && 
+    config.DATABASE_PASSWORD && 
+    (config.DATABASE_NAME || config.DATABASE_DB);
 
+  if (!hasDatabaseUrl && !hasIndividualParams) {
+    // Debug: Show what's missing
+    const missing = [];
+    if (!config.DATABASE_HOST) missing.push('DATABASE_HOST');
+    if (!config.DATABASE_PORT) missing.push('DATABASE_PORT');
+    if (!config.DATABASE_USERNAME && !config.DATABASE_USER) missing.push('DATABASE_USERNAME or DATABASE_USER');
+    if (!config.DATABASE_PASSWORD) missing.push('DATABASE_PASSWORD');
+    if (!config.DATABASE_NAME && !config.DATABASE_DB) missing.push('DATABASE_NAME or DATABASE_DB');
+    
+    console.error(
+      'The Environment variables has failed the following validations:',
+    );
+    console.error(JSON.stringify({
+      databaseConfig: 'Either DATABASE_URL or all individual database parameters must be provided',
+      missing: missing.length > 0 ? `Missing: ${missing.join(', ')}` : 'No individual parameters found'
+    }));
+    console.error(
+      'Please fix the environment variables and try again. Exiting program...',
+    );
+    process.exit(1);
+  }
+
+  // If DATABASE_URL is provided, validate it's a valid PostgreSQL URL
+  if (hasDatabaseUrl) {
+    try {
+      const url = new URL(config.DATABASE_URL);
+      if (!['postgres:', 'postgresql:'].includes(url.protocol)) {
+        console.error(
+          'The Environment variables has failed the following validations:',
+        );
+        console.error(JSON.stringify({
+          databaseUrl: 'DATABASE_URL must be a valid postgres connection string (postgres:// or postgresql://)'
+        }));
+        console.error(
+          'Please fix the environment variables and try again. Exiting program...',
+        );
+        process.exit(1);
+      }
+    } catch (err) {
+      console.error(
+        'The Environment variables has failed the following validations:',
+      );
+      console.error(JSON.stringify({
+        databaseUrl: 'DATABASE_URL must be a valid postgres connection string'
+      }));
+      console.error(
+        'Please fix the environment variables and try again. Exiting program...',
+      );
+      process.exit(1);
+    }
+  }
+
+  const validatedConfig = plainToInstance(EnvironmentVariables, config);
   const errors = validateSync(validatedConfig);
 
   if (errors.length > 0) {

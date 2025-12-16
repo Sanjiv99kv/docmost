@@ -10,7 +10,10 @@ import { BacklinksProcessor } from './processors/backlinks.processor';
   imports: [
     BullModule.forRootAsync({
       useFactory: (environmentService: EnvironmentService) => {
-        const redisConfig = parseRedisUrl(environmentService.getRedisUrl());
+        const redisUrl = environmentService.getRedisUrl();
+        const redisConfig = parseRedisUrl(redisUrl);
+        const isTls = redisUrl.startsWith('rediss://');
+        
         return {
           connection: {
             host: redisConfig.host,
@@ -19,6 +22,11 @@ import { BacklinksProcessor } from './processors/backlinks.processor';
             db: redisConfig.db,
             family: redisConfig.family,
             retryStrategy: createRetryStrategy(),
+            ...(isTls && {
+              tls: {
+                rejectUnauthorized: false, // For AWS ElastiCache with self-signed certs
+              },
+            }),
           },
           defaultJobOptions: {
             attempts: 3,

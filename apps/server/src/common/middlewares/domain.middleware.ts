@@ -42,15 +42,15 @@ export class DomainMiddleware implements NestMiddleware {
       
       // Extract subdomain (first part before first dot)
       const subdomain = hostname.split('.')[0];
-      
+
       // Lookup workspace by hostname
       const workspace = await this.workspaceRepo.findByHostname(subdomain);
-      
+
       if (!workspace) {
         (req as any).workspaceId = null;
         return next();
       }
-      
+
       (req as any).workspaceId = workspace.id;
       (req as any).workspace = workspace;
     }
