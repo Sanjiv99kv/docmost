@@ -24,7 +24,7 @@ import { workspaceAtom } from "@/features/user/atoms/current-user-atom.ts";
 import {
   prefetchApiKeyManagement,
   prefetchApiKeys,
-  prefetchBilling,
+  // prefetchBilling,
   prefetchGroups,
   prefetchLicense,
   prefetchShares,
@@ -82,13 +82,13 @@ const groupedData: DataGroup[] = [
         icon: IconUsers,
         path: "/settings/members",
       },
-      {
-        label: "Billing",
-        icon: IconCoin,
-        path: "/settings/billing",
-        isCloud: true,
-        isAdmin: true,
-      },
+      // {
+      //   label: "Billing",
+      //   icon: IconCoin,
+      //   path: "/settings/billing",
+      //   isCloud: true,
+      //   isAdmin: true,
+      // },
       {
         label: "Security & SSO",
         icon: IconLock,
@@ -208,9 +208,9 @@ export default function SettingsSidebar() {
             case "Groups":
               prefetchHandler = prefetchGroups;
               break;
-            case "Billing":
-              prefetchHandler = prefetchBilling;
-              break;
+            // case "Billing":
+            //   prefetchHandler = prefetchBilling;
+            //   break;
             case "License & Edition":
               if (workspace?.hasLicenseKey) {
                 prefetchHandler = prefetchLicense;

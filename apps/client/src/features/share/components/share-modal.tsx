@@ -155,13 +155,13 @@ export default function ShareModal({ readOnly }: ShareModalProps) {
                 "Page sharing is available on paid plans. Upgrade to share your pages publicly.",
               )}
             </Text>
-            <Button
+            {/* <Button
               size="xs"
               onClick={() => navigate("/settings/billing")}
               fullWidth
             >
               {t("Upgrade Plan")}
-            </Button>
+            </Button> */}
           </>
         ) : isDescendantShared ? (
           <>

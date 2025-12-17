@@ -18,7 +18,7 @@ import { ErrorBoundary } from "react-error-boundary";
 import InviteSignup from "@/pages/auth/invite-signup.tsx";
 import ForgotPassword from "@/pages/auth/forgot-password.tsx";
 import PasswordReset from "./pages/auth/password-reset";
-import Billing from "@/ee/billing/pages/billing.tsx";
+// import Billing from "@/ee/billing/pages/billing.tsx";
 import CloudLogin from "@/ee/pages/cloud-login.tsx";
 import CreateWorkspace from "@/ee/pages/create-workspace.tsx";
 import { isCloud } from "@/lib/config.ts";
@@ -110,7 +110,7 @@ export default function App() {
             <Route path={"security"} element={<Security />} />
             <Route path={"ai"} element={<AiSettings />} />
             {!isCloud() && <Route path={"license"} element={<License />} />}
-            {isCloud() && <Route path={"billing"} element={<Billing />} />}
+            {/* {isCloud() && <Route path={"billing"} element={<Billing />} />} */}
           </Route>
         </Route>
 

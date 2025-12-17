@@ -104,7 +104,7 @@ export class WorkspaceService {
     createWorkspaceDto: CreateWorkspaceDto,
     trx?: KyselyTransaction,
   ) {
-    let trialEndAt = undefined;
+    // let trialEndAt = undefined;
 
     const createdWorkspace = await executeTx(
       this.db,
@@ -120,10 +120,10 @@ export class WorkspaceService {
             ?? createWorkspaceDto.name 
             ?? 'workspace';
           hostname = await this.generateHostname(hostnameSource);
-          trialEndAt = addDays(
-            new Date(),
-            this.environmentService.getBillingTrialDays(),
-          );
+          // trialEndAt = addDays(
+          //   new Date(),
+          //   this.environmentService.getBillingTrialDays(),
+          // );
           status = WorkspaceStatus.Active;
           plan = 'standard';
           billingEmail = user.email;
@@ -136,7 +136,7 @@ export class WorkspaceService {
             description: createWorkspaceDto.description,
             hostname,
             status,
-            trialEndAt,
+            // trialEndAt,
             plan,
             billingEmail,
           },
@@ -214,25 +214,25 @@ export class WorkspaceService {
       trx,
     );
 
-    if (this.environmentService.isCloud() && trialEndAt) {
-      try {
-        const delay = trialEndAt.getTime() - Date.now();
+    // if (this.environmentService.isCloud() && trialEndAt) {
+    //   try {
+    //     const delay = trialEndAt.getTime() - Date.now();
 
-        await this.billingQueue.add(
-          QueueJob.TRIAL_ENDED,
-          { workspaceId: createdWorkspace.id },
-          { delay },
-        );
+    //     await this.billingQueue.add(
+    //       QueueJob.TRIAL_ENDED,
+    //       { workspaceId: createdWorkspace.id },
+    //       { delay },
+    //     );
 
-        await this.billingQueue.add(
-          QueueJob.WELCOME_EMAIL,
-          { userId: user.id },
-          { delay: 60 * 1000 }, // 1m
-        );
-      } catch (err) {
-        this.logger.error(err);
-      }
-    }
+    //     await this.billingQueue.add(
+    //       QueueJob.WELCOME_EMAIL,
+    //       { userId: user.id },
+    //       { delay: 60 * 1000 }, // 1m
+    //     );
+    //   } catch (err) {
+    //     this.logger.error(err);
+    //   }
+    // }
 
     return createdWorkspace;
   }

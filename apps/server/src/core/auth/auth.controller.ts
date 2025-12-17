@@ -35,6 +35,7 @@ import { TokenService } from './services/token.service';
 import { JwtType, JwtExchangePayload } from './dto/jwt-payload';
 import { UserRepo } from '@docmost/db/repos/user/user.repo';
 import { WorkspaceRepo } from '@docmost/db/repos/workspace/workspace.repo';
+import { SkipTransform } from '../../common/decorators/skip-transform.decorator';
 
 @Controller('auth')
 export class AuthController {
@@ -102,7 +103,7 @@ export class AuthController {
   }
 
   @Public()
-  @HttpCode(HttpStatus.OK)
+  @SkipTransform()
   @Get('exchange')
   async exchangeToken(
     @Query('token') token: string,
@@ -137,10 +138,10 @@ export class AuthController {
       // Redirect to workspace home
       const subdomainHost = this.environmentService.getSubdomainHost();
       const redirectUrl = this.environmentService.isHttps()
-        ? `https://${workspace.hostname}.${subdomainHost}`
-        : `http://${workspace.hostname}.${subdomainHost}:${this.environmentService.getPort()}`;
+        ? `https://${workspace.hostname}.${subdomainHost}/home`
+        : `http://${workspace.hostname}.${subdomainHost}:${this.environmentService.getPort()}/home`;
 
-      res.redirect(redirectUrl);
+      res.status(302).redirect(redirectUrl);
     } catch (error) {
       // Provide more specific error messages for debugging
       if (error instanceof UnauthorizedException) {
